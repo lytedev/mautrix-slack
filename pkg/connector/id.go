@@ -45,3 +45,13 @@ func (s *SlackClient) makeTeamPortalKey(teamID string) networkid.PortalKey {
 	}
 	return key
 }
+
+func (s *SlackClient) makeSubSpacePortalKey(teamID string, subType slackid.SubSpaceType) networkid.PortalKey {
+	key := networkid.PortalKey{
+		ID: slackid.MakeSubSpacePortalID(teamID, subType),
+	}
+	if s.Main.br.Config.SplitPortals {
+		key.Receiver = s.UserLogin.ID
+	}
+	return key
+}

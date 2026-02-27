@@ -55,6 +55,9 @@ mute_channels_by_default: false
 # conversation discovery is limited to DMs and channel-scoped events are ignored.
 # Other Slack API responses may still include channel metadata, which is not bridged.
 dm_only: false
+# Should bridged rooms be organized into sub-spaces by type (Channels, DMs, Group DMs)
+# under each workspace space? If false, all rooms are placed directly under the workspace space.
+organize_channels_by_type: false
 
 # Options for backfilling messages from Slack.
 backfill:

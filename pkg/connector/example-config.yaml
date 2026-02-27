@@ -51,6 +51,9 @@ participant_sync_count: 5
 participant_sync_only_on_create: true
 # Should channel portals be muted by default?
 mute_channels_by_default: false
+# Should bridged rooms be organized into sub-spaces by type (Channels, DMs, Group DMs)
+# under each workspace space? If false, all rooms are placed directly under the workspace space.
+organize_channels_by_type: false
 
 # Options for backfilling messages from Slack.
 backfill:

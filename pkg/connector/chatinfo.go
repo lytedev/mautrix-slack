@@ -269,13 +269,24 @@ func (s *SlackClient) wrapChatInfo(ctx context.Context, info *slack.Channel, isN
 	if roomType != database.RoomTypeDM || len(members.MemberMap) == 1 {
 		name = ptr.Ptr(s.formatChannelName(info))
 	}
+	parentID := slackid.MakeTeamPortalID(s.TeamID)
+	if s.Main.Config.OrganizeChannelsByType {
+		switch roomType {
+		case database.RoomTypeDM:
+			parentID = slackid.MakeSubSpacePortalID(s.TeamID, slackid.SubSpaceDMs)
+		case database.RoomTypeGroupDM:
+			parentID = slackid.MakeSubSpacePortalID(s.TeamID, slackid.SubSpaceGroupDMs)
+		default:
+			parentID = slackid.MakeSubSpacePortalID(s.TeamID, slackid.SubSpaceChannels)
+		}
+	}
 	return &bridgev2.ChatInfo{
 		Name:         name,
 		Topic:        ptr.Ptr(info.Topic.Value),
 		Avatar:       avatar,
 		Members:      &members,
 		Type:         &roomType,
-		ParentID:     ptr.Ptr(slackid.MakeTeamPortalID(s.TeamID)),
+		ParentID:     &parentID,
 		ExtraUpdates: extraUpdates,
 		UserLocal:    userLocal,
 		CanBackfill:  true,
@@ -354,7 +365,33 @@ func (s *SlackClient) getTeamInfo() *bridgev2.ChatInfo {
 	}
 }
 
+var subSpaceNames = map[slackid.SubSpaceType]string{
+	slackid.SubSpaceChannels: "Channels",
+	slackid.SubSpaceDMs:      "DMs",
+	slackid.SubSpaceGroupDMs: "Group DMs",
+}
+
+func (s *SlackClient) getSubSpaceInfo(subType slackid.SubSpaceType) *bridgev2.ChatInfo {
+	name := subSpaceNames[subType]
+	selfEvtSender := s.makeEventSender(s.UserID)
+	return &bridgev2.ChatInfo{
+		Name:  &name,
+		Topic: nil,
+		Members: &bridgev2.ChatMemberList{
+			IsFull:           false,
+			TotalMemberCount: 0,
+			MemberMap:        map[networkid.UserID]bridgev2.ChatMember{selfEvtSender.Sender: {EventSender: selfEvtSender}},
+			PowerLevels:      &bridgev2.PowerLevelOverrides{EventsDefault: ptr.Ptr(100)},
+		},
+		Type:     ptr.Ptr(database.RoomTypeSpace),
+		ParentID: ptr.Ptr(slackid.MakeTeamPortalID(s.TeamID)),
+	}
+}
+
 func (s *SlackClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+	if _, subType, ok := slackid.ParseSubSpacePortalID(portal.ID); ok {
+		return s.getSubSpaceInfo(subType), nil
+	}
 	teamID, channelID := slackid.ParsePortalID(portal.ID)
 	if teamID == "" {
 		return nil, fmt.Errorf("invalid portal ID %q", portal.ID)

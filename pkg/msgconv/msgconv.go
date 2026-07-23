@@ -142,6 +142,28 @@ func (mc *MessageConverter) GetMentionedMessageURL(ctx context.Context, channelI
 	return portal.MXID.EventURI(msg.MXID, mc.Bridge.Bot.GetMXID().Homeserver()).MatrixToURL()
 }
 
+// GetMentionedMessageInfo finds the Matrix event a Slack message was bridged to,
+// so that workspace-internal message links can point at Matrix instead of Slack.
+func (mc *MessageConverter) GetMentionedMessageInfo(ctx context.Context, channelID, timestamp string) (roomID id.RoomID, eventID id.EventID) {
+	source := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
+	teamID, _ := slackid.ParseUserLoginID(source.ID)
+	message, err := mc.Bridge.DB.Message.GetFirstPartByID(ctx, source.ID, slackid.MakeMessageID(teamID, channelID, timestamp))
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get linked message")
+		return
+	} else if message == nil || message.HasFakeMXID() {
+		return
+	}
+	portal, err := mc.Bridge.GetExistingPortalByKey(ctx, message.Room)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal of linked message")
+		return
+	} else if portal == nil || portal.MXID == "" {
+		return
+	}
+	return portal.MXID, message.MXID
+}
+
 func New(br *bridgev2.Bridge, db *slackdb.SlackDB) *MessageConverter {
 	mc := &MessageConverter{
 		Bridge: br,
@@ -165,6 +187,7 @@ func New(br *bridgev2.Bridge, db *slackdb.SlackDB) *MessageConverter {
 		GetUserInfo:      mc.GetMentionedUserInfo,
 		GetChannelInfo:   mc.GetMentionedRoomInfo,
 		GetUserGroupInfo: mc.GetMentionedUserGroupInfo,
+		GetMessageInfo:   mc.GetMentionedMessageInfo,
 	})
 	return mc
 }

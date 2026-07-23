@@ -300,14 +300,10 @@ func (mc *MessageConverter) renderRichTextSectionElements(
 			mrkdwn.RoomMentionToHTML(&htmlText, e.ChannelID, mxid, alias, name, mc.ServerName)
 			closingTags(&htmlText, e.Style)
 		case *slack.RichTextSectionLinkElement:
-			var linkText string
-			if e.Text != "" {
-				linkText = e.Text
-			} else {
-				linkText = e.URL
-			}
+			resolved := mc.SlackMrkdwnParser.Params.ResolveInternalLink(ctx, e.URL)
+			linkURL, linkText := mrkdwn.LinkTarget(e.URL, e.Text, resolved)
 			openingTags(&htmlText, e.Style)
-			_, _ = fmt.Fprintf(&htmlText, `<a href="%s">%s</a>`, html.EscapeString(e.URL), textToHTML(linkText))
+			_, _ = fmt.Fprintf(&htmlText, `<a href="%s">%s</a>`, html.EscapeString(linkURL), textToHTML(linkText))
 			closingTags(&htmlText, e.Style)
 		case *slack.RichTextSectionBroadcastElement:
 			mentions.Room = true

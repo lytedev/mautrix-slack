@@ -121,31 +121,13 @@ func (mc *MessageConverter) GetMentionedUserGroupInfo(ctx context.Context, userG
 	return
 }
 
-func (mc *MessageConverter) GetMentionedMessageURL(ctx context.Context, channelID, messageTS string) string {
-	source := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
-	teamID, _ := slackid.ParseUserLoginID(source.ID)
-	msgID := slackid.MakeMessageID(teamID, channelID, messageTS)
-	msg, err := mc.Bridge.DB.Message.GetFirstPartByID(ctx, source.ID, msgID)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Str("message_id", string(msgID)).Msg("Failed to get info of mentioned message")
-	}
-	if msg == nil || msg.HasFakeMXID() {
-		return ""
-	}
-	portal, err := mc.Bridge.GetExistingPortalByKey(ctx, msg.Room)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Stringer("message_id", msg.Room).Msg("Failed to get portal of mentioned message")
-	}
-	if portal == nil || portal.MXID == "" {
-		return ""
-	}
-	return portal.MXID.EventURI(msg.MXID, mc.Bridge.Bot.GetMXID().Homeserver()).MatrixToURL()
-}
-
 // GetMentionedMessageInfo finds the Matrix event a Slack message was bridged to,
 // so that workspace-internal message links can point at Matrix instead of Slack.
 func (mc *MessageConverter) GetMentionedMessageInfo(ctx context.Context, channelID, timestamp string) (roomID id.RoomID, eventID id.EventID) {
-	source := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
+	source, _ := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
+	if source == nil || mc.Bridge == nil {
+		return
+	}
 	teamID, _ := slackid.ParseUserLoginID(source.ID)
 	message, err := mc.Bridge.DB.Message.GetFirstPartByID(ctx, source.ID, slackid.MakeMessageID(teamID, channelID, timestamp))
 	if err != nil {

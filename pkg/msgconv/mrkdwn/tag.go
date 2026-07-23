@@ -91,6 +91,8 @@ type astSlackURL struct {
 	astSlackTag
 
 	url string
+	// resolved is set if the URL pointed at a bridged channel or message.
+	resolved *ResolvedLink
 }
 
 func (n *astSlackURL) String() string {
@@ -119,6 +121,16 @@ type Params struct {
 	ServerName     string
 	GetUserInfo    func(ctx context.Context, userID string) (mxid id.UserID, name string)
 	GetChannelInfo func(ctx context.Context, channelID string) (mxid id.RoomID, alias id.RoomAlias, name string)
+	// GetMessageInfo finds the bridged Matrix event for a Slack message, and is
+	// used to point workspace-internal message links at Matrix instead of Slack.
+	GetMessageInfo func(ctx context.Context, channelID, timestamp string) (roomID id.RoomID, eventID id.EventID)
+}
+
+func (p *Params) channelInfo(ctx context.Context, channelID string) (mxid id.RoomID, alias id.RoomAlias, name string) {
+	if p.GetChannelInfo == nil {
+		return
+	}
+	return p.GetChannelInfo(ctx, channelID)
 }
 
 type slackTagParser struct {
@@ -160,7 +172,7 @@ func (s *slackTagParser) Parse(parent ast.Node, block text.Reader, pc parser.Con
 		pc.Get(ContextKeyMentions).(*event.Mentions).Add(mxid)
 		return &astSlackUserMention{astSlackTag: tag, userID: content, mxid: mxid, name: name}
 	case "#":
-		mxid, alias, name := s.GetChannelInfo(ctx, content)
+		mxid, alias, name := s.channelInfo(ctx, content)
 		return &astSlackChannelMention{astSlackTag: tag, channelID: content, serverName: s.ServerName, mxid: mxid, alias: alias, name: name}
 	case "!":
 		switch content {
@@ -170,7 +182,7 @@ func (s *slackTagParser) Parse(parent ast.Node, block text.Reader, pc parser.Con
 		}
 		return &astSlackSpecialMention{astSlackTag: tag, content: content}
 	case "":
-		return &astSlackURL{astSlackTag: tag, url: content}
+		return &astSlackURL{astSlackTag: tag, url: content, resolved: s.ResolveInternalLink(ctx, content)}
 	default:
 		return nil
 	}
@@ -262,11 +274,7 @@ func (r *slackTagHTMLRenderer) renderSlackTag(w goldmarkUtil.BufWriter, source [
 			return
 		}
 	case *astSlackURL:
-		label := node.label
-		if label == "" {
-			label = node.url
-		}
-		_, _ = fmt.Fprintf(w, `<a href="%s">%s</a>`, html.EscapeString(node.url), html.EscapeString(label))
+		LinkToHTML(w, node.url, node.label, node.resolved)
 		return
 	}
 	stringifiable, ok := n.(fmt.Stringer)

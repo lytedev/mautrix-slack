@@ -103,7 +103,10 @@ func (mc *MessageConverter) GetMentionedRoomInfo(ctx context.Context, channelID 
 // GetMentionedMessageInfo finds the Matrix event a Slack message was bridged to,
 // so that workspace-internal message links can point at Matrix instead of Slack.
 func (mc *MessageConverter) GetMentionedMessageInfo(ctx context.Context, channelID, timestamp string) (roomID id.RoomID, eventID id.EventID) {
-	source := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
+	source, _ := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
+	if source == nil || mc.Bridge == nil {
+		return
+	}
 	teamID, _ := slackid.ParseUserLoginID(source.ID)
 	message, err := mc.Bridge.DB.Message.GetFirstPartByID(ctx, source.ID, slackid.MakeMessageID(teamID, channelID, timestamp))
 	if err != nil {

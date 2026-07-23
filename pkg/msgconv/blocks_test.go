@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/slack-go/slack"
+	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-slack/pkg/msgconv/mrkdwn"
 )
@@ -103,6 +104,68 @@ func TestSlackBlocksToMatrixMessageMentionPermalink(t *testing.T) {
 		t.Fatalf("unexpected body: %q", part.Content.Body)
 	}
 	expectedHTML := `take a look at <a href="https://example.slack.com/archives/C123/p1234567890123456">testbot in #general</a>`
+	if part.Content.FormattedBody != expectedHTML {
+		t.Fatalf("unexpected formatted body: %q", part.Content.FormattedBody)
+	}
+}
+
+// testMessageConverterWithBridgedMessage returns a converter that knows about one
+// bridged message, without needing a real bridge/database behind it.
+func testMessageConverterWithBridgedMessage() *MessageConverter {
+	return &MessageConverter{
+		SlackMrkdwnParser: mrkdwn.New(&mrkdwn.Params{
+			ServerName: "example.com",
+			GetChannelInfo: func(ctx context.Context, channelID string) (id.RoomID, id.RoomAlias, string) {
+				if channelID != "C123" {
+					return "", "", ""
+				}
+				return "!general:example.com", "", "#general"
+			},
+			GetMessageInfo: func(ctx context.Context, channelID, timestamp string) (id.RoomID, id.EventID) {
+				if channelID != "C123" || timestamp != "1234567890.123456" {
+					return "", ""
+				}
+				return "!general:example.com", "$abc123"
+			},
+		}),
+	}
+}
+
+func TestSlackBlocksToMatrixMessageMentionBridged(t *testing.T) {
+	mc := testMessageConverterWithBridgedMessage()
+	part, err := mc.slackBlocksToMatrix(context.Background(), nil, nil, slack.Blocks{
+		BlockSet: []slack.Block{
+			slack.NewRichTextBlock("", slack.NewRichTextSection(
+				slack.NewRichTextSectionTextElement("take a look at ", nil),
+				slack.NewRichTextSectionMessageMentionElement("C123", "1234567890.123456", "", "", "", nil),
+			)),
+		},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedHTML := `take a look at <a href="https://matrix.to/#/%21general:example.com/$abc123?via=example.com">message in #general</a>`
+	if part.Content.FormattedBody != expectedHTML {
+		t.Fatalf("unexpected formatted body: %q", part.Content.FormattedBody)
+	}
+}
+
+func TestSlackBlocksToMatrixLinkToBridgedMessage(t *testing.T) {
+	mc := testMessageConverterWithBridgedMessage()
+	part, err := mc.slackBlocksToMatrix(context.Background(), nil, nil, slack.Blocks{
+		BlockSet: []slack.Block{
+			slack.NewRichTextBlock("", slack.NewRichTextSection(
+				slack.NewRichTextSectionLinkElement("https://example.slack.com/archives/C123/p1234567890123456", "", nil),
+				slack.NewRichTextSectionTextElement(" and ", nil),
+				slack.NewRichTextSectionLinkElement("https://example.com/", "", nil),
+			)),
+		},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedHTML := `<a href="https://matrix.to/#/%21general:example.com/$abc123?via=example.com">message in #general</a>` +
+		` and <a href="https://example.com/">https://example.com/</a>`
 	if part.Content.FormattedBody != expectedHTML {
 		t.Fatalf("unexpected formatted body: %q", part.Content.FormattedBody)
 	}

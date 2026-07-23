@@ -214,6 +214,10 @@ func (mc *MessageConverter) getTeamDomain(ctx context.Context) string {
 	return teamPortal.Metadata.(*slackid.PortalMetadata).TeamDomain
 }
 
+// defaultMessageMentionText is the link text used when the mention itself carries
+// no text and neither the channel nor the author could be named.
+const defaultMessageMentionText = "Slack message"
+
 func (mc *MessageConverter) renderMessageMention(ctx context.Context, mention *slack.RichTextSectionMessageMentionElement) string {
 	var channelName string
 	if mention.ChannelID != "" && ctx.Value(contextKeySource) != nil && mc.Bridge != nil {
@@ -231,7 +235,7 @@ func (mc *MessageConverter) renderMessageMention(ctx context.Context, mention *s
 		_, authorName = mc.GetMentionedUserInfo(ctx, mention.AuthorID)
 	}
 
-	linkText := "Slack message"
+	linkText := defaultMessageMentionText
 	switch {
 	case mention.Text != "":
 		linkText = mention.Text
@@ -243,9 +247,28 @@ func (mc *MessageConverter) renderMessageMention(ctx context.Context, mention *s
 		linkText = fmt.Sprintf("%s's message", authorName)
 	}
 
+	// Prefer the bridged Matrix event: a Slack permalink is useless to a Matrix
+	// user reading this message, and the mention carries the IDs we need.
+	resolved := mc.SlackMrkdwnParser.ResolveMessage(ctx, mention.ChannelID, mention.MessageTS)
+	if resolved == nil && mention.URL != "" {
+		resolved = mc.SlackMrkdwnParser.ResolveInternalLink(ctx, mention.URL)
+	}
+	// Without a sender-provided text or a known author, the resolver's label names
+	// the target room the same way the rest of the bridge does.
+	if resolved != nil && resolved.Label != "" && mention.Text == "" && authorName == "" {
+		linkText = resolved.Label
+	}
+
 	var htmlText strings.Builder
 	openingTags(&htmlText, mention.Style)
 	switch {
+	case resolved != nil:
+		_, _ = fmt.Fprintf(
+			&htmlText,
+			`<a href="%s">%s</a>`,
+			html.EscapeString(resolved.URL),
+			html.EscapeString(linkText),
+		)
 	case mention.URL != "":
 		_, _ = fmt.Fprintf(
 			&htmlText,
@@ -300,7 +323,7 @@ func (mc *MessageConverter) renderRichTextSectionElements(
 			mrkdwn.RoomMentionToHTML(&htmlText, e.ChannelID, mxid, alias, name, mc.ServerName)
 			closingTags(&htmlText, e.Style)
 		case *slack.RichTextSectionLinkElement:
-			resolved := mc.SlackMrkdwnParser.Params.ResolveInternalLink(ctx, e.URL)
+			resolved := mc.SlackMrkdwnParser.ResolveInternalLink(ctx, e.URL)
 			linkURL, linkText := mrkdwn.LinkTarget(e.URL, e.Text, resolved)
 			openingTags(&htmlText, e.Style)
 			_, _ = fmt.Fprintf(&htmlText, `<a href="%s">%s</a>`, html.EscapeString(linkURL), textToHTML(linkText))

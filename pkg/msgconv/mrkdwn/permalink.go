@@ -101,7 +101,7 @@ func (p *Params) ResolveInternalLink(ctx context.Context, rawURL string) *Resolv
 		return nil
 	}
 	if permalink.Timestamp != "" {
-		if resolved := p.resolveMessageLink(ctx, permalink); resolved != nil {
+		if resolved := p.ResolveMessage(ctx, permalink.ChannelID, permalink.Timestamp); resolved != nil {
 			return resolved
 		}
 		// The specific message isn't bridged (or was bridged before the bridge
@@ -137,22 +137,42 @@ func LinkToHTML(out io.Writer, rawURL, label string, resolved *ResolvedLink) {
 	_, _ = fmt.Fprintf(out, `<a href="%s">%s</a>`, html.EscapeString(href), html.EscapeString(text))
 }
 
-func (p *Params) resolveMessageLink(ctx context.Context, permalink *Permalink) *ResolvedLink {
-	if p.GetMessageInfo == nil {
+// ResolveMessage finds the Matrix event a Slack message was bridged to. It returns
+// nil if the message isn't bridged.
+func (p *Params) ResolveMessage(ctx context.Context, channelID, timestamp string) *ResolvedLink {
+	if p.GetMessageInfo == nil || channelID == "" || timestamp == "" {
 		return nil
 	}
-	roomID, eventID := p.GetMessageInfo(ctx, permalink.ChannelID, permalink.Timestamp)
+	roomID, eventID := p.GetMessageInfo(ctx, channelID, timestamp)
 	if roomID == "" || eventID == "" {
 		return nil
 	}
 	label := "message"
-	if _, _, name := p.channelInfo(ctx, permalink.ChannelID); name != "" {
+	if _, _, name := p.channelInfo(ctx, channelID); name != "" {
 		label = fmt.Sprintf("message in %s", name)
 	}
 	return &ResolvedLink{
 		URL:   roomID.EventURI(eventID, p.ServerName).MatrixToURL(),
 		Label: label,
 	}
+}
+
+// ResolveMessage finds the bridged Matrix event for a Slack message, or nil if
+// the parser has no way to look messages up.
+func (smp *SlackMrkdwnParser) ResolveMessage(ctx context.Context, channelID, timestamp string) *ResolvedLink {
+	if smp == nil || smp.Params == nil {
+		return nil
+	}
+	return smp.Params.ResolveMessage(ctx, channelID, timestamp)
+}
+
+// ResolveInternalLink converts a workspace-internal Slack URL into a Matrix link,
+// or nil if the parser has no way to look targets up.
+func (smp *SlackMrkdwnParser) ResolveInternalLink(ctx context.Context, rawURL string) *ResolvedLink {
+	if smp == nil || smp.Params == nil {
+		return nil
+	}
+	return smp.Params.ResolveInternalLink(ctx, rawURL)
 }
 
 func (p *Params) resolveChannelLink(ctx context.Context, permalink *Permalink) *ResolvedLink {

@@ -57,6 +57,7 @@ var fixIndentedParagraphs = goldmark.WithParserOptions(parser.WithBlockParsers(u
 
 func New(options *Params) *SlackMrkdwnParser {
 	return &SlackMrkdwnParser{
+		Params: options,
 		Markdown: goldmark.New(
 			goldmark.WithParser(mdext.ParserWithoutFeatures(removeFeatures...)),
 			fixIndentedParagraphs,

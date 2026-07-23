@@ -334,6 +334,42 @@ func (s *SlackClient) syncTeamPortal(ctx context.Context) error {
 	} else {
 		s.TeamPortal.UpdateInfo(ctx, info, s.UserLogin, nil, time.Time{})
 	}
+	// Ensure the user is in the team portal and it's added to the personal filtering space.
+	// This is needed for cases where the team portal already existed before personal_filtering_spaces
+	// was enabled, since CreateMatrixRoom only adds to user spaces on initial creation.
+	s.UserLogin.MarkInPortal(ctx, s.TeamPortal)
+	if s.Main.Config.OrganizeChannelsByType {
+		err := s.syncSubSpaces(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *SlackClient) syncSubSpaces(ctx context.Context) error {
+	log := zerolog.Ctx(ctx)
+	subTypes := []slackid.SubSpaceType{slackid.SubSpaceChannels, slackid.SubSpaceDMs, slackid.SubSpaceGroupDMs}
+	for _, subType := range subTypes {
+		portalKey := s.makeSubSpacePortalKey(s.TeamID, subType)
+		portal, err := s.Main.br.UnlockedGetPortalByKey(ctx, portalKey, false)
+		if err != nil {
+			return fmt.Errorf("failed to get sub-space portal for %s: %w", subType, err)
+		}
+		info := s.getSubSpaceInfo(subType)
+		if portal.MXID == "" {
+			err = portal.CreateMatrixRoom(ctx, s.UserLogin, info)
+			if err != nil {
+				return fmt.Errorf("failed to create sub-space room for %s: %w", subType, err)
+			}
+			log.Info().Str("sub_space_type", string(subType)).Msg("Created sub-space")
+		} else {
+			portal.UpdateInfo(ctx, info, s.UserLogin, nil, time.Time{})
+		}
+		// Ensure the user is joined to the sub-space so it appears nested
+		// under the team space in the client's space hierarchy.
+		s.UserLogin.MarkInPortal(ctx, portal)
+	}
 	return nil
 }
 

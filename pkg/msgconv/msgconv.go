@@ -121,25 +121,29 @@ func (mc *MessageConverter) GetMentionedUserGroupInfo(ctx context.Context, userG
 	return
 }
 
-func (mc *MessageConverter) GetMentionedMessageURL(ctx context.Context, channelID, messageTS string) string {
-	source := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
+// GetMentionedMessageInfo finds the Matrix event a Slack message was bridged to,
+// so that workspace-internal message links can point at Matrix instead of Slack.
+func (mc *MessageConverter) GetMentionedMessageInfo(ctx context.Context, channelID, timestamp string) (roomID id.RoomID, eventID id.EventID) {
+	source, _ := ctx.Value(contextKeySource).(*bridgev2.UserLogin)
+	if source == nil || mc.Bridge == nil {
+		return
+	}
 	teamID, _ := slackid.ParseUserLoginID(source.ID)
-	msgID := slackid.MakeMessageID(teamID, channelID, messageTS)
-	msg, err := mc.Bridge.DB.Message.GetFirstPartByID(ctx, source.ID, msgID)
+	message, err := mc.Bridge.DB.Message.GetFirstPartByID(ctx, source.ID, slackid.MakeMessageID(teamID, channelID, timestamp))
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Str("message_id", string(msgID)).Msg("Failed to get info of mentioned message")
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get linked message")
+		return
+	} else if message == nil || message.HasFakeMXID() {
+		return
 	}
-	if msg == nil || msg.HasFakeMXID() {
-		return ""
-	}
-	portal, err := mc.Bridge.GetExistingPortalByKey(ctx, msg.Room)
+	portal, err := mc.Bridge.GetExistingPortalByKey(ctx, message.Room)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Stringer("message_id", msg.Room).Msg("Failed to get portal of mentioned message")
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal of linked message")
+		return
+	} else if portal == nil || portal.MXID == "" {
+		return
 	}
-	if portal == nil || portal.MXID == "" {
-		return ""
-	}
-	return portal.MXID.EventURI(msg.MXID, mc.Bridge.Bot.GetMXID().Homeserver()).MatrixToURL()
+	return portal.MXID, message.MXID
 }
 
 func New(br *bridgev2.Bridge, db *slackdb.SlackDB) *MessageConverter {
@@ -165,6 +169,7 @@ func New(br *bridgev2.Bridge, db *slackdb.SlackDB) *MessageConverter {
 		GetUserInfo:      mc.GetMentionedUserInfo,
 		GetChannelInfo:   mc.GetMentionedRoomInfo,
 		GetUserGroupInfo: mc.GetMentionedUserGroupInfo,
+		GetMessageInfo:   mc.GetMentionedMessageInfo,
 	})
 	return mc
 }

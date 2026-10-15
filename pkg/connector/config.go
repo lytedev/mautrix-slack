@@ -40,6 +40,7 @@ type Config struct {
 	ParticipantSyncOnlyOnCreate bool `yaml:"participant_sync_only_on_create"`
 	MuteChannelsByDefault       bool `yaml:"mute_channels_by_default"`
 	DMOnly                      bool `yaml:"dm_only"`
+	OrganizeChannelsByType      bool `yaml:"organize_channels_by_type"`
 
 	Backfill BackfillConfig `yaml:"backfill"`
 
@@ -135,5 +136,6 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Bool, "participant_sync_only_on_create")
 	helper.Copy(up.Bool, "mute_channels_by_default")
 	helper.Copy(up.Bool, "dm_only")
+	helper.Copy(up.Bool, "organize_channels_by_type")
 	helper.Copy(up.Int, "backfill", "conversation_count")
 }

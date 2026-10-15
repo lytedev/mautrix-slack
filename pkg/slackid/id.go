@@ -91,8 +91,32 @@ func UserLoginIDToUserID(userLoginID networkid.UserLoginID) networkid.UserID {
 	return networkid.UserID(strings.ToLower(string(userLoginID)))
 }
 
+type SubSpaceType string
+
+const (
+	SubSpaceChannels SubSpaceType = "channels"
+	SubSpaceDMs      SubSpaceType = "dms"
+	SubSpaceGroupDMs SubSpaceType = "group-dms"
+)
+
 func MakeTeamPortalID(teamID string) networkid.PortalID {
 	return networkid.PortalID(teamID)
+}
+
+func MakeSubSpacePortalID(teamID string, subType SubSpaceType) networkid.PortalID {
+	return networkid.PortalID(fmt.Sprintf("%s-space-%s", teamID, subType))
+}
+
+func ParseSubSpacePortalID(id networkid.PortalID) (teamID string, subType SubSpaceType, ok bool) {
+	str := string(id)
+	idx := strings.Index(str, "-space-")
+	if idx < 0 {
+		return
+	}
+	teamID = str[:idx]
+	subType = SubSpaceType(str[idx+len("-space-"):])
+	ok = subType == SubSpaceChannels || subType == SubSpaceDMs || subType == SubSpaceGroupDMs
+	return
 }
 
 func MakePortalID(teamID, channelID string) networkid.PortalID {

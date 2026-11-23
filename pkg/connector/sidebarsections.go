@@ -218,8 +218,27 @@ func bridgeOwnedSectionTagPrefix(teamID string) string {
 	return elementCustomSectionTagPrefix + "slack." + teamID + "."
 }
 
-func isSectionRoomTag(tag string) bool {
-	return tag == elementFavouriteRoomTag || tag == elementLowPriorityRoomTag || strings.HasPrefix(tag, elementCustomSectionTagPrefix)
+// customSectionTagsThatExist lists the custom sections Element knows. A room
+// tag naming a section missing from this set is ignored by Element, which
+// shows the room in its default section, so it does not count as the user
+// having placed the room.
+func customSectionTagsThatExist(settings map[string]json.RawMessage) map[string]bool {
+	existingSectionData := map[string]json.RawMessage{}
+	if raw, present := settings[elementCustomSectionDataKey]; present {
+		_ = json.Unmarshal(raw, &existingSectionData)
+	}
+	tags := make(map[string]bool, len(existingSectionData))
+	for tag := range existingSectionData {
+		tags[tag] = true
+	}
+	return tags
+}
+
+func tagPlacesTheRoomInElement(tag string, customSectionTagsThatExist map[string]bool) bool {
+	if tag == elementFavouriteRoomTag || tag == elementLowPriorityRoomTag {
+		return true
+	}
+	return strings.HasPrefix(tag, elementCustomSectionTagPrefix) && customSectionTagsThatExist[tag]
 }
 
 type wantedCustomSection struct {
@@ -262,6 +281,7 @@ func planSidebarSync(input sidebarSyncInput) (sidebarSyncPlan, error) {
 	}
 	plan.ElementSettingsToWrite = updatedSettings
 
+	existingCustomSectionTags := customSectionTagsThatExist(input.ElementSettings)
 	for channelID, currentTags := range input.RoomTagsByChannelID {
 		change := planRoomTags(
 			currentTags,
@@ -269,6 +289,7 @@ func planSidebarSync(input sidebarSyncInput) (sidebarSyncPlan, error) {
 			wantedTagByChannelID[channelID],
 			input.SectionTagByChannelIDAtPreviousSync,
 			channelID,
+			existingCustomSectionTags,
 		)
 		if len(change.TagsToAdd) > 0 || len(change.TagsToRemove) > 0 {
 			plan.RoomTagChangeByChannelID[channelID] = change
@@ -277,7 +298,7 @@ func planSidebarSync(input sidebarSyncInput) (sidebarSyncPlan, error) {
 	return plan, nil
 }
 
-func planRoomTags(currentTags []string, ownedPrefix, wantedTag string, previousWantedTags map[string]string, channelID string) roomTagChange {
+func planRoomTags(currentTags []string, ownedPrefix, wantedTag string, previousWantedTags map[string]string, channelID string, existingCustomSectionTags map[string]bool) roomTagChange {
 	var change roomTagChange
 	hasTag := func(wanted string) bool { return slices.Contains(currentTags, wanted) }
 	slackMovedTheChannel := false
@@ -292,7 +313,7 @@ func planRoomTags(currentTags []string, ownedPrefix, wantedTag string, previousW
 		if strings.HasPrefix(tag, ownedPrefix) {
 			ownedTags = append(ownedTags, tag)
 		}
-		if isSectionRoomTag(tag) {
+		if !strings.HasPrefix(tag, ownedPrefix) && tagPlacesTheRoomInElement(tag, existingCustomSectionTags) {
 			hasAnySectionTag = true
 		}
 	}

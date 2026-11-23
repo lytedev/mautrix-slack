@@ -58,6 +58,13 @@ dm_only: false
 # Should bridged rooms be organized into sub-spaces by type (Channels, DMs, Group DMs)
 # under each workspace space? If false, all rooms are placed directly under the workspace space.
 organize_channels_by_type: false
+# Should the sections of the Slack sidebar be copied into Element's room list sections?
+# Requires double puppeting and a login with a browser token (xoxc) and cookie.
+# Slack's own sections become Element sections with the same name and order, and
+# starred channels get the favourite tag. Everything else is left to Element's
+# defaults. Sections and tags that the bridge did not create are never touched, and
+# a room the user moved in Element stays there until Slack moves it again.
+sync_sidebar_sections: false
 
 # Options for backfilling messages from Slack.
 backfill:

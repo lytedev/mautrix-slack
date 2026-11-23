@@ -41,6 +41,7 @@ type Config struct {
 	MuteChannelsByDefault       bool `yaml:"mute_channels_by_default"`
 	DMOnly                      bool `yaml:"dm_only"`
 	OrganizeChannelsByType      bool `yaml:"organize_channels_by_type"`
+	SyncSidebarSections         bool `yaml:"sync_sidebar_sections"`
 
 	Backfill BackfillConfig `yaml:"backfill"`
 
@@ -137,5 +138,6 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Bool, "mute_channels_by_default")
 	helper.Copy(up.Bool, "dm_only")
 	helper.Copy(up.Bool, "organize_channels_by_type")
+	helper.Copy(up.Bool, "sync_sidebar_sections")
 	helper.Copy(up.Int, "backfill", "conversation_count")
 }

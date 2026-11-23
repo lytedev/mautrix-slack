@@ -18,6 +18,7 @@ package connector
 
 import (
 	"context"
+	"sync"
 
 	"github.com/slack-go/slack"
 	"maunium.net/go/mautrix"
@@ -34,6 +35,10 @@ type SlackConnector struct {
 	MsgConv *msgconv.MessageConverter
 
 	directMedia bool
+
+	// Element keeps all of its settings in one account data event with no
+	// compare-and-swap, so logins of one bridge must not write it at once.
+	sidebarSyncLock sync.Mutex
 }
 
 var (

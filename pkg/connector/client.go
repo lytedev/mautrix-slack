@@ -92,6 +92,7 @@ func (s *SlackConnector) LoadUserLogin(ctx context.Context, login *bridgev2.User
 			lastReadCache:          make(map[string]string),
 			userResyncQueue:        make(chan *bridgev2.Ghost, 16),
 			fileCreatedListeners:   exsync.NewMap[string, chan struct{}](),
+			sidebarSyncRequests:    make(chan struct{}, 1),
 		}
 		if sc.IsRealUser {
 			sc.RTM = client.NewRTM()
@@ -152,6 +153,10 @@ type SlackClient struct {
 	userGroupInfoCacheLock sync.Mutex
 	lastReadCache          map[string]string
 	lastReadCacheLock      sync.Mutex
+
+	sidebarSyncRequests          chan struct{}
+	sidebarSyncStateLock         sync.Mutex
+	sidebarSectionTagByChannelID map[string]string
 }
 
 var (
@@ -292,6 +297,7 @@ func (s *SlackClient) connect(ctx context.Context, bootResp *slack.ClientUserBoo
 	}
 	go s.SyncEmojis(ctx)
 	go s.syncChannels(ctx, prefetchedChannels, prefetched)
+	go s.runSidebarSectionSyncLoop(ctx)
 	return nil
 }
 

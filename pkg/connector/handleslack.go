@@ -116,6 +116,9 @@ func (s *SlackClient) HandleSlackEvent(ctx context.Context, rawEvt any) {
 		}
 	case *slack.EmojiChangedEvent:
 		go s.handleEmojiChange(ctx, evt)
+	case *slackSidebarSectionsChangedEvent:
+		log.Debug().Str("event_type", evt.Type).Msg("Slack sidebar sections changed")
+		s.requestSidebarSectionSync()
 	case *slack.FileCreatedEvent:
 		if evt.UserID == s.UserID {
 			ch, _ := s.fileCreatedListeners.Swap(evt.FileID, nil)

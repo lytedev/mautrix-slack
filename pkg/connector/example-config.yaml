@@ -55,6 +55,13 @@ mute_channels_by_default: false
 # conversation discovery is limited to DMs and channel-scoped events are ignored.
 # Other Slack API responses may still include channel metadata, which is not bridged.
 dm_only: false
+# Should the sections of the Slack sidebar be copied into Element's room list sections?
+# Requires double puppeting and a login with a browser token (xoxc) and cookie.
+# Slack's own sections become Element sections with the same name and order, and
+# starred channels get the favourite tag. Everything else is left to Element's
+# defaults. Sections and tags that the bridge did not create are never touched, and
+# a room the user moved in Element stays there until Slack moves it again.
+sync_sidebar_sections: false
 
 # Options for backfilling messages from Slack.
 backfill:

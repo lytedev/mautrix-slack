@@ -500,12 +500,12 @@ func (s *SlackClient) syncSidebarSections(ctx context.Context) error {
 	}
 	doublePuppet := s.UserLogin.User.DoublePuppet(ctx)
 	if doublePuppet == nil {
-		log.Debug().Msg("Not syncing sidebar sections without double puppeting")
+		log.Warn().Msg("Not syncing sidebar sections without double puppeting, although sync_sidebar_sections is on")
 		return nil
 	}
 	appserviceIntent, isAppserviceIntent := doublePuppet.(*matrix.ASIntent)
 	if !isAppserviceIntent {
-		log.Debug().Type("intent_type", doublePuppet).Msg("Not syncing sidebar sections: double puppet is not an appservice intent")
+		log.Warn().Type("intent_type", doublePuppet).Msg("Not syncing sidebar sections although sync_sidebar_sections is on: double puppet is not an appservice intent")
 		return nil
 	}
 
@@ -601,6 +601,13 @@ func (s *SlackClient) applySidebarSections(ctx context.Context, matrixClient sid
 			Strs("tags_added", change.TagsToAdd).
 			Strs("tags_removed", change.TagsToRemove).
 			Msg("Changed sidebar section tags of room")
+	}
+	if len(plan.RoomTagChangeByChannelID) > 0 {
+		log.Info().
+			Int("rooms_retagged", len(plan.RoomTagChangeByChannelID)).
+			Int("slack_sections", len(sections)).
+			Bool("every_write_succeeded", everyWriteSucceeded).
+			Msg("Synced Slack sidebar sections into room tags")
 	}
 	if everyWriteSucceeded {
 		s.sidebarSyncStateLock.Lock()

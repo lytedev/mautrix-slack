@@ -319,14 +319,7 @@ func (s *SlackClient) wrapChatInfo(ctx context.Context, info *slack.Channel, isN
 	}
 	parentID := slackid.MakeTeamPortalID(s.TeamID)
 	if s.Main.Config.OrganizeChannelsByType {
-		switch roomType {
-		case database.RoomTypeDM:
-			parentID = slackid.MakeSubSpacePortalID(s.TeamID, slackid.SubSpaceDMs)
-		case database.RoomTypeGroupDM:
-			parentID = slackid.MakeSubSpacePortalID(s.TeamID, slackid.SubSpaceGroupDMs)
-		default:
-			parentID = slackid.MakeSubSpacePortalID(s.TeamID, slackid.SubSpaceChannels)
-		}
+		parentID = slackid.MakeSubSpacePortalID(s.TeamID, subSpaceTypeForConversation(roomType, info.Name))
 	}
 	return &bridgev2.ChatInfo{
 		Name:         name,
@@ -417,6 +410,26 @@ var subSpaceNames = map[slackid.SubSpaceType]string{
 	slackid.SubSpaceChannels: "Channels",
 	slackid.SubSpaceDMs:      "DMs",
 	slackid.SubSpaceGroupDMs: "Group DMs",
+	slackid.SubSpaceHuddles:  "Huddles",
+}
+
+const huddleNotesConversationNamePrefix = ":headphones: Huddle "
+
+func isHuddleNotesConversationName(name string) bool {
+	return strings.HasPrefix(strings.TrimPrefix(name, "#"), huddleNotesConversationNamePrefix)
+}
+
+func subSpaceTypeForConversation(roomType database.RoomType, slackConversationName string) slackid.SubSpaceType {
+	switch roomType {
+	case database.RoomTypeDM:
+		return slackid.SubSpaceDMs
+	case database.RoomTypeGroupDM:
+		return slackid.SubSpaceGroupDMs
+	}
+	if isHuddleNotesConversationName(slackConversationName) {
+		return slackid.SubSpaceHuddles
+	}
+	return slackid.SubSpaceChannels
 }
 
 func (s *SlackClient) getSubSpaceInfo(subType slackid.SubSpaceType) *bridgev2.ChatInfo {

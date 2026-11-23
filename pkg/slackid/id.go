@@ -97,6 +97,7 @@ const (
 	SubSpaceChannels SubSpaceType = "channels"
 	SubSpaceDMs      SubSpaceType = "dms"
 	SubSpaceGroupDMs SubSpaceType = "group-dms"
+	SubSpaceHuddles  SubSpaceType = "huddles"
 )
 
 func MakeTeamPortalID(teamID string) networkid.PortalID {
@@ -115,7 +116,7 @@ func ParseSubSpacePortalID(id networkid.PortalID) (teamID string, subType SubSpa
 	}
 	teamID = str[:idx]
 	subType = SubSpaceType(str[idx+len("-space-"):])
-	ok = subType == SubSpaceChannels || subType == SubSpaceDMs || subType == SubSpaceGroupDMs
+	ok = subType == SubSpaceChannels || subType == SubSpaceDMs || subType == SubSpaceGroupDMs || subType == SubSpaceHuddles
 	return
 }
 

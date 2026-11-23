@@ -413,7 +413,7 @@ func (s *SlackClient) syncTeamPortal(ctx context.Context) error {
 
 func (s *SlackClient) syncSubSpaces(ctx context.Context) error {
 	log := zerolog.Ctx(ctx)
-	subTypes := []slackid.SubSpaceType{slackid.SubSpaceChannels, slackid.SubSpaceDMs, slackid.SubSpaceGroupDMs}
+	subTypes := []slackid.SubSpaceType{slackid.SubSpaceChannels, slackid.SubSpaceDMs, slackid.SubSpaceGroupDMs, slackid.SubSpaceHuddles}
 	for _, subType := range subTypes {
 		portalKey := s.makeSubSpacePortalKey(s.TeamID, subType)
 		portal, err := s.Main.br.UnlockedGetPortalByKey(ctx, portalKey, false)
@@ -433,6 +433,33 @@ func (s *SlackClient) syncSubSpaces(ctx context.Context) error {
 		// Ensure the user is joined to the sub-space so it appears nested
 		// under the team space in the client's space hierarchy.
 		s.UserLogin.MarkInPortal(ctx, portal)
+	}
+	return s.moveHuddleNotesPortalsOutOfChannelsSubSpace(ctx)
+}
+
+func selectPortalsWithMatrixRoomAndHuddleNotesName(candidatePortals []*bridgev2.Portal) []*bridgev2.Portal {
+	var selectedPortals []*bridgev2.Portal
+	for _, candidatePortal := range candidatePortals {
+		if candidatePortal.MXID != "" && isHuddleNotesConversationName(candidatePortal.Name) {
+			selectedPortals = append(selectedPortals, candidatePortal)
+		}
+	}
+	return selectedPortals
+}
+
+func (s *SlackClient) moveHuddleNotesPortalsOutOfChannelsSubSpace(ctx context.Context) error {
+	channelsSubSpaceKey := s.makeSubSpacePortalKey(s.TeamID, slackid.SubSpaceChannels)
+	childPortals, err := s.Main.br.GetChildPortals(ctx, channelsSubSpaceKey)
+	if err != nil {
+		return fmt.Errorf("failed to list portals in the channels sub-space: %w", err)
+	}
+	huddlesSubSpaceID := slackid.MakeSubSpacePortalID(s.TeamID, slackid.SubSpaceHuddles)
+	huddleNotesPortals := selectPortalsWithMatrixRoomAndHuddleNotesName(childPortals)
+	for _, huddleNotesPortal := range huddleNotesPortals {
+		huddleNotesPortal.UpdateInfo(ctx, &bridgev2.ChatInfo{ParentID: &huddlesSubSpaceID}, s.UserLogin, nil, time.Time{})
+	}
+	if len(huddleNotesPortals) > 0 {
+		zerolog.Ctx(ctx).Info().Int("moved_portal_count", len(huddleNotesPortals)).Msg("Moved huddle notes rooms into the huddles sub-space")
 	}
 	return nil
 }

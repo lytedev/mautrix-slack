@@ -42,3 +42,26 @@ func TestParseSlackTimestamp(t *testing.T) {
 		})
 	}
 }
+
+func TestSubSpacePortalIDRoundTripsForEverySubSpaceType(t *testing.T) {
+	allSubSpaceTypes := []SubSpaceType{SubSpaceChannels, SubSpaceDMs, SubSpaceGroupDMs, SubSpaceHuddles}
+	for _, subSpaceType := range allSubSpaceTypes {
+		t.Run(string(subSpaceType), func(t *testing.T) {
+			portalID := MakeSubSpacePortalID("T123", subSpaceType)
+
+			parsedTeamID, parsedSubSpaceType, parsedOK := ParseSubSpacePortalID(portalID)
+
+			assert.True(t, parsedOK, "a portal ID made for sub-space type %q must be recognised as a sub-space portal ID, but %q was rejected", subSpaceType, portalID)
+			assert.Equal(t, "T123", parsedTeamID, "parsing %q must return the team ID it was made with", portalID)
+			assert.Equal(t, subSpaceType, parsedSubSpaceType, "parsing %q must return the sub-space type it was made with", portalID)
+		})
+	}
+}
+
+func TestParseSubSpacePortalIDRejectsAnUnknownSubSpaceSuffix(t *testing.T) {
+	portalIDWithUnknownSuffix := MakeSubSpacePortalID("T123", SubSpaceType("not-a-real-sub-space"))
+
+	_, _, parsedOK := ParseSubSpacePortalID(portalIDWithUnknownSuffix)
+
+	assert.False(t, parsedOK, "a portal ID with an unknown sub-space suffix must be rejected so it is treated as a normal portal, but %q was accepted", portalIDWithUnknownSuffix)
+}

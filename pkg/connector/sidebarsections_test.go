@@ -366,7 +366,7 @@ func TestReconcileLeavesARoomTheUserMovedInElementWhereItIs(t *testing.T) {
 
 			plan := mustPlan(t, sidebarSyncInput{
 				SlackSections:                       threeStandardSections(),
-				ElementSettings:                     map[string]json.RawMessage{},
+				ElementSettings:                     settingsWithTheUsersOwnSectionsDeclared(t),
 				RoomTagsByChannelID:                 map[string][]string{"C1": userTags},
 				SectionTagByChannelIDAtPreviousSync: unchangedSinceLastSync,
 			})
@@ -375,6 +375,34 @@ func TestReconcileLeavesARoomTheUserMovedInElementWhereItIs(t *testing.T) {
 				t.Errorf("expected a room the user put in %s to stay there until Slack moves the channel again, got %+v", name, change)
 			}
 		})
+	}
+}
+
+func settingsWithTheUsersOwnSectionsDeclared(t *testing.T) map[string]json.RawMessage {
+	return settingsFrom(t, `{
+		"RoomList.CustomSectionData": {
+			"`+foreignSectionTag+`": {"tag": "`+foreignSectionTag+`", "name": "Mine"},
+			"`+otherTeamSectionTag+`": {"tag": "`+otherTeamSectionTag+`", "name": "Other workspace"}
+		},
+		"RoomList.OrderedCustomSections": ["`+foreignSectionTag+`", "`+otherTeamSectionTag+`"]
+	}`)
+}
+
+func TestARoomTaggedWithASectionElementNoLongerHasIsFiledLikeAnUntaggedRoom(t *testing.T) {
+	sectionDeletedInElement := "element.io.section.0b8a7c1e-0000-4000-8000-deleted00000"
+
+	plan := mustPlan(t, sidebarSyncInput{
+		SlackSections:       threeStandardSections(),
+		ElementSettings:     settingsWithTheUsersOwnSectionsDeclared(t),
+		RoomTagsByChannelID: map[string][]string{"C1": {sectionDeletedInElement}},
+	})
+
+	change := plan.RoomTagChangeByChannelID["C1"]
+	if !slices.Contains(change.TagsToAdd, engineeringTag) {
+		t.Errorf("expected a room whose only section tag names a section Element no longer has to be filed into its Slack section, because Element ignores such a tag and shows the room in its default section, so the user did not place it; got %+v", change)
+	}
+	if slices.Contains(change.TagsToRemove, sectionDeletedInElement) {
+		t.Errorf("expected the bridge to leave a tag it did not create on the room, got %+v", change)
 	}
 }
 
